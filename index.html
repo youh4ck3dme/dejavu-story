@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DejaVu">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>DejaVu Story</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --accent: #c8a16e;
+    --progress-bg: rgba(255,255,255,0.15);
+    --progress-fg: #ffffff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: #fff;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    height: 100dvh;
+    height: 100svh;
+    width: 100%;
+    position: relative;
+  }
+
+  .story-container {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    height: 100svh;
+    overflow: hidden;
+    background: #000;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    will-change: opacity, transform;
+  }
+
+  .slide.active {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+  }
+
+  .slide.prev {
+    opacity: 0;
+    z-index: 1;
+  }
+
+  .slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+    transform: scale(1.04);
+    transition: transform 8s ease-out;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .slide.active img {
+    transform: scale(1);
+  }
+
+  /* Progress bars */
+  .progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    padding: env(safe-area-inset-top, 12px) 12px 0 12px;
+    pointer-events: none;
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 2px;
+    background: var(--progress-bg);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--progress-fg);
+    transform-origin: left;
+  }
+
+  .progress-bar.done .progress-fill {
+    width: 100%;
+  }
+
+  .progress-bar.active .progress-fill {
+    animation: fill linear forwards;
+  }
+
+  @keyframes fill {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+
+  /* Touch zones */
+  .nav-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    z-index: 5;
+    cursor: pointer;
+  }
+
+  .nav-zone.left { left: 0; }
+  .nav-zone.right { right: 0; }
+
+  /* Subtle vignette */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.35) 100%);
+    opacity: 0.6;
+  }
+
+  /* Loading */
+  .loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    z-index: 20;
+    transition: opacity 0.6s ease;
+  }
+
+  .loader.hidden { opacity: 0; pointer-events: none; }
+
+  .loader span {
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
+    animation: pulse 1.2s ease-in-out infinite;
+    margin: 0 4px;
+  }
+
+  .loader span:nth-child(2) { animation-delay: 0.2s; }
+  .loader span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+
+  /* Pause indicator */
+  .paused-hint {
+    position: absolute;
+    bottom: env(safe-area-inset-bottom, 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    opacity: 0;
+    transition: opacity 0.4s;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  body.paused .paused-hint { opacity: 1; }
+
+  @media (hover: hover) {
+    .nav-zone:hover { background: linear-gradient(to right, rgba(255,255,255,0.03), transparent); }
+    .nav-zone.right:hover { background: linear-gradient(to left, rgba(255,255,255,0.03), transparent); }
+  }
+</style>
+</head>
+<body>
+  <div class="loader" id="loader">
+    <span></span><span></span><span></span>
+  </div>
+
+  <div class="story-container" id="container">
+    <div class="progress" id="progress"></div>
+    <div class="vignette"></div>
+    <div class="nav-zone left" id="prevZone"></div>
+    <div class="nav-zone right" id="nextZone"></div>
+    <div class="paused-hint">paused</div>
+  </div>
+
+<script>
+const images = [
+  'images/photo01.jpg','images/photo02.jpg','images/photo03.jpg','images/photo04.jpg',
+  'images/photo05.jpg','images/photo06.jpg','images/photo07.jpg','images/photo08.jpg',
+  'images/photo09.jpg','images/photo10.jpg','images/photo11.jpg','images/photo12.jpg',
+  'images/photo13.jpg','images/photo14.jpg','images/photo15.jpg','images/photo16.jpg',
+  'images/photo17.jpg','images/photo18.jpg','images/photo19.jpg','images/photo20.jpg',
+  'images/photo21.jpg'
+];
+
+// Shuffle randomly
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+const slides = shuffle([...images]);
+const DURATION = 5200; // ms per slide
+let current = 0;
+let timer = null;
+let startTime = 0;
+let remaining = DURATION;
+let isPaused = false;
+let progressBars = [];
+
+const container = document.getElementById('container');
+const progressEl = document.getElementById('progress');
+const loader = document.getElementById('loader');
+
+// Preload
+let loaded = 0;
+const preload = slides.map(src => {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = img.onerror = () => {
+      loaded++;
+      if (loaded >= Math.min(3, slides.length)) {
+        setTimeout(() => loader.classList.add('hidden'), 300);
+      }
+      resolve();
+    };
+    img.src = src;
+  });
+});
+
+Promise.all(preload).then(() => {
+  // continue
+});
+
+function buildProgress() {
+  progressEl.innerHTML = '';
+  progressBars = slides.map((_, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill';
+    bar.appendChild(fill);
+    progressEl.appendChild(bar);
+    return { bar, fill };
+  });
+}
+
+function buildSlides() {
+  slides.forEach((src, i) => {
+    const slide = document.createElement('div');
+    slide.className = 'slide';
+    slide.dataset.index = i;
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    slide.appendChild(img);
+    container.appendChild(slide);
+  });
+}
+
+function show(index, direction = 1) {
+  const all = container.querySelectorAll('.slide');
+  all.forEach(s => {
+    s.classList.remove('active', 'prev');
+  });
+
+  const prevIndex = (index - direction + slides.length) % slides.length;
+  if (all[prevIndex]) all[prevIndex].classList.add('prev');
+  if (all[index]) all[index].classList.add('active');
+
+  // Progress
+  progressBars.forEach((p, i) => {
+    p.bar.classList.remove('active', 'done');
+    p.fill.style.animation = 'none';
+    p.fill.style.width = '0%';
+    if (i < index) {
+      p.bar.classList.add('done');
+      p.fill.style.width = '100%';
+    } else if (i === index) {
+      p.bar.classList.add('active');
+      // restart animation
+      void p.fill.offsetWidth;
+      p.fill.style.animation = `fill ${DURATION}ms linear forwards`;
+    }
+  });
+
+  current = index;
+  startTimer();
+}
+
+function startTimer() {
+  clearTimeout(timer);
+  if (isPaused) return;
+  remaining = DURATION;
+  startTime = Date.now();
+  timer = setTimeout(() => next(), DURATION);
+}
+
+function next() {
+  const nextIndex = (current + 1) % slides.length;
+  show(nextIndex, 1);
+}
+
+function prev() {
+  const prevIndex = (current - 1 + slides.length) % slides.length;
+  show(prevIndex, -1);
+}
+
+function pause() {
+  if (isPaused) return;
+  isPaused = true;
+  clearTimeout(timer);
+  remaining = DURATION - (Date.now() - startTime);
+  document.body.classList.add('paused');
+  // freeze progress animation
+  const active = progressBars[current];
+  if (active) {
+    const computed = getComputedStyle(active.fill);
+    const width = computed.width;
+    active.fill.style.animation = 'none';
+    active.fill.style.width = width;
+  }
+}
+
+function resume() {
+  if (!isPaused) return;
+  isPaused = false;
+  document.body.classList.remove('paused');
+  const active = progressBars[current];
+  if (active) {
+    active.fill.style.animation = `fill ${remaining}ms linear forwards`;
+  }
+  timer = setTimeout(() => next(), remaining);
+}
+
+// Events
+document.getElementById('nextZone').addEventListener('click', next);
+document.getElementById('prevZone').addEventListener('click', prev);
+
+let touchStartX = 0;
+container.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  pause();
+}, { passive: true });
+
+container.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 40) {
+    if (dx < 0) next(); else prev();
+  } else {
+    resume();
+  }
+}, { passive: true });
+
+container.addEventListener('mousedown', pause);
+container.addEventListener('mouseup', resume);
+container.addEventListener('mouseleave', resume);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  if (e.key === 'p' || e.key === 'P') { isPaused ? resume() : pause(); }
+});
+
+// Visibility
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause();
+  else if (!document.hidden && isPaused) resume();
+});
+
+// Init
+buildProgress();
+buildSlides();
+setTimeout(() => show(0), 400);
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
