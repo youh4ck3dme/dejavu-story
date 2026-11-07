@@ -274,7 +274,7 @@ Promise.all(preload).then(() => {
 });
 
 function buildProgress() {
-  progressEl.innerHTML = '';
+  progressEl.textContent = '';
   progressBars = slides.map((_, i) => {
     const bar = document.createElement('div');
     bar.className = 'progress-bar';
