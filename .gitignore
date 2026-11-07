@@ -1,0 +1,18 @@
+# Závislosti
+node_modules/
+
+# Build výstupy
+dist/
+bundle.js
+
+# Lokálne konfiguračné súbory
+.env
+.env.local
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Systémové súbory
+.DS_Store
+Thumbs.db
